@@ -139,6 +139,7 @@ if __name__=='__main__':
         #index_stock_cons_df = ak.index_stock_cons(index="000300") #沪深300
         index_stock_cons_df = ak.index_stock_cons_sina(index="000300")#沪深300
     else:
+        index_stock_cons_df['symbol'] = ['' for stock in argv[1:]]
         index_stock_cons_df['code'] = [stock for stock in argv[1:]]
         index_stock_cons_df['name'] = ['' for stock in argv[1:]]
 
