@@ -135,19 +135,19 @@ if __name__=='__main__':
 
     index_stock_cons_df = pd.DataFrame()
     if hsstocks == '*':
-        index_stock_cons_df = ak.index_stock_cons(index="000300") #沪深300
+        #存在数据缺失
+        #index_stock_cons_df = ak.index_stock_cons(index="000300") #沪深300
+        index_stock_cons_df = ak.index_stock_cons_sina(index="000300")#沪深300
     else:
-        index_stock_cons_df['品种代码'] = [stock for stock in argv[1:]]
-        index_stock_cons_df['品种名称'] = ['' for stock in argv[1:]]
-    #print("stock arrary:",stockarry)
+        index_stock_cons_df['code'] = [stock for stock in argv[1:]]
+        index_stock_cons_df['name'] = ['' for stock in argv[1:]]
 
     timepath = r'./time.xls'
     roic_global_df = init_global_time_df(timepath)
 
-    #for stock in stockarry:
     for item in index_stock_cons_df.itertuples():
-        stock = item[1]#品种代码
-        name  = item[2]#品种名称
+        stock = item[2]#品种代码 code
+        name  = item[3]#品种名称  name
 
         bget,roic_stock_df = calc_stock_roic_df(stock,name)
         if bget is False:
