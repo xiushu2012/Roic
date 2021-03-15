@@ -1,0 +1,194 @@
+﻿# -*- coding: utf-8 -*-
+
+import akshare as ak
+import numpy as np  
+import pandas as pd  
+import math
+import datetime
+import os
+import matplotlib.pyplot as plt
+import openpyxl
+import time, datetime
+import xlsxwriter
+from matplotlib.pyplot import MultipleLocator
+
+
+def get_akshare_stock_financial(xlsfile,stock):
+    try:
+        shname='financial'
+        isExist = os.path.exists(xlsfile)
+        if not isExist:
+            stock_financial_abstract_df = ak.stock_financial_abstract(stock)
+            stock_financial_abstract_df.to_excel(xlsfile,sheet_name=shname)
+            print("xfsfile:%s create" % (xlsfile))
+        else:
+            print("xfsfile:%s exist" % (xlsfile))
+            #print(stock_financial_abstract_df)
+    except IOError:
+        print("Error get stock financial:%s" % stock )
+    else:
+        return xlsfile, shname
+
+def get_fin_number(strcounts):
+    if strcounts is np.nan:
+        return 0
+    else:
+        counts = float(strcounts[0:-1].replace(',',''))
+        return counts
+
+def get_fin_date(time):
+    return time+" 00:00:00"
+
+def get_roic_value(capital, profits,cost):
+    if (capital is np.nan) or (profits is np.nan) or (cost is np.nan):
+        return 0
+    floatcapital = float(capital[0:-1].replace(',',''))
+    floatprofits = float(profits[0:-1].replace(',',''))
+    floatcost = float(cost[0:-1].replace(',',''))
+    return 100*(floatcost+floatprofits)/floatcapital
+
+
+def calc_latest_roic_mean(row,beg,end):
+    latestlist = list(row[beg:end:-1])
+    nozerocnt =  len(latestlist)- latestlist.count(0)
+    print(latestlist,nozerocnt)
+    if nozerocnt == 0:
+        return 0
+    else:
+        return np.sum(latestlist)/nozerocnt
+
+
+
+def get_time_stamp(date):
+    time1 = datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+    secondsFrom1970 = time.mktime(time1.timetuple())
+    return secondsFrom1970
+
+
+def calc_stock_roic_df(stock,name):
+    roic_stock_df = pd.DataFrame()
+    bget = False
+    try:
+        filefolder = r'./data'
+        isExist = os.path.exists(filefolder)
+        if not isExist:
+            os.makedirs(filefolder)
+            print("AkShareFile:%s create" % (filefolder))
+        else:
+            print("AkShareFile:%s exist" % (filefolder))
+
+        fininpath = "%s/%s%s" % (filefolder, stock, '_fin_in.xls')
+
+        # 总资产22,493,600,000.00元
+        finpath, finsheet = get_akshare_stock_financial(fininpath, stock)
+        print("data of path:" + finpath + "sheetname:" + finsheet)
+
+        stock_financial_abstract_df = pd.read_excel(finpath, finsheet, converters={'截止日期': str, '资产总计': str,'净利润': str,'财务费用': str})[['截止日期', '资产总计', '净利润', '财务费用']]
+
+        if stock_financial_abstract_df.empty:
+            bget = False;
+        else:
+            findatecol =  stock  +  'date'
+            finroiccol =  stock  +   name
+
+            stock_financial_abstract_df[findatecol] = stock_financial_abstract_df.apply(lambda row: get_fin_date(row['截止日期']),axis=1)
+            stock_financial_abstract_df[finroiccol] = stock_financial_abstract_df.apply(lambda row: get_roic_value(row['资产总计'], row['净利润'],row['财务费用']), axis=1)
+
+            roic_stock_df = stock_financial_abstract_df[stock_financial_abstract_df['净利润'] != 0][[findatecol,finroiccol]]
+            bget = True;
+    except IOError:
+        print("read error file:%s" % stock)
+    finally:
+        return bget, roic_stock_df
+
+
+
+def init_global_time_df(timepath):
+
+    isExist = os.path.exists(timepath)
+    if not isExist:
+        print("time path not exist:%s" % (timepath))
+        return pd.DataFrame()
+    else:
+        print("time path exist:%s" % (timepath))
+
+    time_list = pd.read_excel(timepath, "analy")['date'].values.tolist()
+    time_df = pd.DataFrame(index=time_list)
+    return time_df
+
+
+
+
+
+
+if __name__=='__main__':
+    #print(get_time_stamp('2021-02-24 00:00:00'))
+
+    from sys import argv
+    hsstocks = ""
+    if len(argv) > 1:
+        hsstocks = argv[1]
+    else:
+        print("please run like 'python Tobinsq.py [*|002230]'")
+        exit(1)
+
+
+    index_stock_cons_df = pd.DataFrame()
+    if hsstocks == '*':
+        index_stock_cons_df = ak.index_stock_cons(index="000300") #沪深300
+    else:
+        index_stock_cons_df['品种代码'] = [stock for stock in argv[1:]]
+        index_stock_cons_df['品种名称'] = ['' for stock in argv[1:]]
+    #print("stock arrary:",stockarry)
+
+    timepath = r'./time.xls'
+    roic_global_df = init_global_time_df(timepath)
+
+    #for stock in stockarry:
+    for item in index_stock_cons_df.itertuples():
+        stock = item[1]#品种代码
+        name  = item[2]#品种名称
+
+        bget,roic_stock_df = calc_stock_roic_df(stock,name)
+        if bget is False:
+            print("get empty DataFrame:%s" % stock)
+            continue
+
+        col_name = roic_stock_df.columns.tolist()
+        for tup in roic_stock_df.itertuples():
+            try:
+                if tup[1] in roic_global_df.index.values:
+                    roic_global_df.loc[tup[1], col_name[1]] = tup[2]
+            except KeyError:
+                print("stock:%s,time:%s,location error" % (stock,tup[1]))
+    roic_global_df = roic_global_df.T
+    roic_global_df[np.isnan(roic_global_df)] = 0.;
+    roic_global_df['近期均值'] = roic_global_df.apply(lambda row: calc_latest_roic_mean(row,-1,-4),axis=1)
+    roic_global_df['远期均值'] = roic_global_df.apply(lambda row: calc_latest_roic_mean(row, -5, -8), axis=1)
+    roic_global_df = roic_global_df.sort_values('远期均值', ascending=False)
+
+
+
+    outanalypath = r'./roic.xlsx'
+    workbook = xlsxwriter.Workbook(outanalypath)
+    worksheet = workbook.add_worksheet()
+    bold = workbook.add_format({'bold': True})
+    headRows = 1
+    headCols = 1
+
+    dfindex = roic_global_df.index.values.tolist()
+    for rowNum in range(len(dfindex)):
+        worksheet.write_string(rowNum + headRows, 0, str(dfindex[rowNum]))
+
+
+    for colNum in range(len(roic_global_df.columns)):
+        xlColCont = roic_global_df[roic_global_df.columns[colNum]].tolist()
+        worksheet.write_string(0, colNum+headCols, str(roic_global_df.columns[colNum]), bold)
+        for rowNum in range(len(xlColCont)):
+            if np.isnan(xlColCont[rowNum]):
+                worksheet.write_number(rowNum + headRows, colNum + headCols, 0)
+            else:
+                worksheet.write_number(rowNum + headRows, colNum+headCols, xlColCont[rowNum])
+    workbook.close()
+
+    print("roic value out in :" + outanalypath)
