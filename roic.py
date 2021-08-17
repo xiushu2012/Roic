@@ -51,11 +51,21 @@ def get_roic_value(capital, profits,cost):
 def calc_latest_roic_mean(row,beg,end):
     latestlist = list(row[beg:end:-1])
     nozerocnt =  len(latestlist)- latestlist.count(0)
-    print(latestlist,nozerocnt)
+    #print(latestlist,nozerocnt)
     if nozerocnt == 0:
         return 0
     else:
         return np.sum(latestlist)/nozerocnt
+
+def calc_all_roic_std(row):
+    latestlist = list(row[::])
+    nozerolist = [roic for roic in latestlist if roic !=0 ]
+    nozerocnt =  len(nozerolist)
+    print(nozerolist,nozerocnt)
+    if nozerocnt == 0:
+        return 0
+    else:
+        return np.std(nozerolist)
 
 
 
@@ -140,7 +150,7 @@ if __name__=='__main__':
         index_stock_cons_df = ak.index_stock_cons_csindex(index="000300")#沪深300
         #index_stock_cons_df = ak.index_stock_cons_sina(index="000300")#沪深300
     else:
-        index_stock_cons_df['symbol'] = ['' for stock in argv[1:]]
+        #index_stock_cons_df['symbol'] = ['' for stock in argv[1:]]
         index_stock_cons_df['code'] = [stock for stock in argv[1:]]
         index_stock_cons_df['name'] = ['' for stock in argv[1:]]
 
@@ -165,9 +175,12 @@ if __name__=='__main__':
                 print("stock:%s,time:%s,location error" % (stock,tup[1]))
     roic_global_df = roic_global_df.T
     roic_global_df[np.isnan(roic_global_df)] = 0.;
-    roic_global_df['近期均值'] = roic_global_df.apply(lambda row: calc_latest_roic_mean(row,-1,-4),axis=1)
-    roic_global_df['远期均值'] = roic_global_df.apply(lambda row: calc_latest_roic_mean(row, -5, -8), axis=1)
-    roic_global_df = roic_global_df.sort_values('远期均值', ascending=False)
+    roic_global_df['全局标差'] = roic_global_df.apply(lambda row: calc_all_roic_std(row), axis=1)
+    roic_global_df['近期均值'] = roic_global_df.apply(lambda row: calc_latest_roic_mean(row,-2,-5),axis=1)
+    roic_global_df['远期均值'] = roic_global_df.apply(lambda row: calc_latest_roic_mean(row, -6, -9), axis=1)
+
+
+    roic_global_df = roic_global_df.sort_values('近期均值', ascending=False)
 
 
 
