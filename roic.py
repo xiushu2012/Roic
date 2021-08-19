@@ -40,11 +40,17 @@ def get_fin_date(time):
     return time+" 00:00:00"
 
 def get_roic_value(capital, profits,cost):
-    if (capital is np.nan) or (profits is np.nan) or (cost is np.nan):
+    if (capital is np.nan):
         return 0
     floatcapital = float(capital[0:-1].replace(',',''))
-    floatprofits = float(profits[0:-1].replace(',',''))
-    floatcost = float(cost[0:-1].replace(',',''))
+
+    floatprofits = 0.0
+    if (profits is not np.nan):
+        floatprofits = float(profits[0:-1].replace(',',''))
+    floatcost = 0.0
+    if (cost is not np.nan):
+        floatcost = float(cost[0:-1].replace(',',''))
+
     return 100*(floatcost+floatprofits)/floatcapital
 
 
