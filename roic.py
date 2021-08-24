@@ -29,6 +29,22 @@ def get_akshare_stock_financial(xlsfile,stock):
     else:
         return xlsfile, shname
 
+def get_akshare_stock_trade(xlsfile,stock):
+    try:
+        shname='trade'
+        isExist = os.path.exists(xlsfile)
+        if not isExist:
+            stock_a_indicator_df = ak.stock_a_lg_indicator(stock)
+            stock_a_indicator_df.to_excel(xlsfile,sheet_name=shname)
+            print("xfsfile:%s create" % (xlsfile))
+        else:
+            print("xfsfile:%s exist" % (xlsfile))
+    except IOError:
+        print("Error get stock trade:%s" % stock )
+    else:
+        return xlsfile, shname
+
+
 def get_fin_number(strcounts):
     if strcounts is np.nan:
         return 0
@@ -64,7 +80,7 @@ def calc_latest_roic_mean(row,beg,end):
         return np.sum(latestlist)/nozerocnt
 
 def calc_all_roic_std(row):
-    latestlist = list(row[::])
+    latestlist = list(row[:-1])
     nozerolist = [roic for roic in latestlist if roic !=0 ]
     nozerocnt =  len(nozerolist)
     print(nozerolist,nozerocnt)
@@ -74,11 +90,26 @@ def calc_all_roic_std(row):
         return np.std(nozerolist)
 
 
-
 def get_time_stamp(date):
     time1 = datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
     secondsFrom1970 = time.mktime(time1.timetuple())
     return secondsFrom1970
+
+
+def get_latest30_pbvalue(tradedf,datecolumn,pbcolumn):
+    count = 0
+    value = 0
+    days = 30
+    latest = ''
+    for tup in zip(tradedf[datecolumn], tradedf[pbcolumn]):
+        value += float(tup[1])
+        count += 1
+
+        if count == 1:
+            latest = tup[0]
+        if count >= days:
+            break
+    return ('30pb',value/days)
 
 
 def calc_stock_roic_df(stock,name):
@@ -94,11 +125,15 @@ def calc_stock_roic_df(stock,name):
             print("AkShareFile:%s exist" % (filefolder))
 
         fininpath = "%s/%s%s" % (filefolder, stock, '_fin_in.xls')
+        tradeinpath = "%s/%s%s" % (filefolder, stock, '_trade_in.xls')
 
         # 总资产22,493,600,000.00元
         finpath, finsheet = get_akshare_stock_financial(fininpath, stock)
         print("data of path:" + finpath + "sheetname:" + finsheet)
+        tradepath, tradesheet = get_akshare_stock_trade(tradeinpath, stock)
+        print("data of path:" + tradepath + "sheetname:" + tradesheet)
 
+        stock_a_indicator_df = pd.read_excel(tradepath, tradesheet, converters={'trade_date': str, 'pb': str})[['trade_date', 'pb']]
         stock_financial_abstract_df = pd.read_excel(finpath, finsheet, converters={'截止日期': str, '资产总计': str,'净利润': str,'财务费用': str})[['截止日期', '资产总计', '净利润', '财务费用']]
 
         if stock_financial_abstract_df.empty:
@@ -111,6 +146,10 @@ def calc_stock_roic_df(stock,name):
             stock_financial_abstract_df[finroiccol] = stock_financial_abstract_df.apply(lambda row: get_roic_value(row['资产总计'], row['净利润'],row['财务费用']), axis=1)
 
             roic_stock_df = stock_financial_abstract_df[stock_financial_abstract_df['净利润'] != 0][[findatecol,finroiccol]]
+            latestpb = get_latest30_pbvalue(stock_a_indicator_df, 'trade_date', 'pb')
+            pbdataframe = pd.DataFrame([[latestpb[0],latestpb[1]]],columns=roic_stock_df.columns)
+            roic_stock_df = roic_stock_df.append(pbdataframe)
+
             bget = True;
     except IOError:
         print("read error file:%s" % stock)
@@ -181,35 +220,47 @@ if __name__=='__main__':
                 print("stock:%s,time:%s,location error" % (stock,tup[1]))
     roic_global_df = roic_global_df.T
     roic_global_df[np.isnan(roic_global_df)] = 0.;
-    roic_global_df['全局标差'] = roic_global_df.apply(lambda row: calc_all_roic_std(row), axis=1)
-    roic_global_df['近期均值'] = roic_global_df.apply(lambda row: calc_latest_roic_mean(row,-2,-5),axis=1)
-    roic_global_df['远期均值'] = roic_global_df.apply(lambda row: calc_latest_roic_mean(row, -6, -9), axis=1)
+    globalstddf = roic_global_df.apply(lambda row: calc_all_roic_std(row), axis=1)
+    nearmeandf = roic_global_df.apply(lambda row: calc_latest_roic_mean(row,-2,-5),axis=1)
+    farmeandf  = roic_global_df.apply(lambda row: calc_latest_roic_mean(row, -5, -8), axis=1)
 
-
+    roic_global_df['全局标差'] = globalstddf
+    roic_global_df['近期均值'] = nearmeandf
+    roic_global_df['远期均值'] = farmeandf
+    roic_global_df['价值品质'] = roic_global_df.apply(lambda row: row['近期均值']/5-row['30pb'], axis=1)
     roic_global_df = roic_global_df.sort_values('近期均值', ascending=False)
 
+    #bond_selected_df = roic_global_df[(roic_global_df['近期均值'] >= 8.0) & (roic_global_df['远期均值'] >= 8.0)]
+    bond_selected_df = roic_global_df[roic_global_df['近期均值'] >= 8.0]
+    bond_selected_df = bond_selected_df.sort_values('价值品质',ascending=False)
 
+    fileout =  './roic' + datetime.datetime.now().strftime('%Y%m') + '.xls'
+    writer = pd.ExcelWriter(fileout)
+    roic_global_df.to_excel(writer,'all')
+    bond_selected_df.to_excel(writer,'selected')
+    writer.save()
+    print("roic value out in:" + fileout)
 
-    outanalypath = r'./roic.xlsx'
-    workbook = xlsxwriter.Workbook(outanalypath)
-    worksheet = workbook.add_worksheet()
-    bold = workbook.add_format({'bold': True})
-    headRows = 1
-    headCols = 1
-
-    dfindex = roic_global_df.index.values.tolist()
-    for rowNum in range(len(dfindex)):
-        worksheet.write_string(rowNum + headRows, 0, str(dfindex[rowNum]))
-
-
-    for colNum in range(len(roic_global_df.columns)):
-        xlColCont = roic_global_df[roic_global_df.columns[colNum]].tolist()
-        worksheet.write_string(0, colNum+headCols, str(roic_global_df.columns[colNum]), bold)
-        for rowNum in range(len(xlColCont)):
-            if np.isnan(xlColCont[rowNum]):
-                worksheet.write_number(rowNum + headRows, colNum + headCols, 0)
-            else:
-                worksheet.write_number(rowNum + headRows, colNum+headCols, xlColCont[rowNum])
-    workbook.close()
-
-    print("roic value out in :" + outanalypath)
+    # outanalypath = r'./roic.xlsx'
+    # workbook = xlsxwriter.Workbook(outanalypath)
+    # worksheet = workbook.add_worksheet()
+    # bold = workbook.add_format({'bold': True})
+    # headRows = 1
+    # headCols = 1
+    #
+    # dfindex = roic_global_df.index.values.tolist()
+    # for rowNum in range(len(dfindex)):
+    #     worksheet.write_string(rowNum + headRows, 0, str(dfindex[rowNum]))
+    #
+    #
+    # for colNum in range(len(roic_global_df.columns)):
+    #     xlColCont = roic_global_df[roic_global_df.columns[colNum]].tolist()
+    #     worksheet.write_string(0, colNum+headCols, str(roic_global_df.columns[colNum]), bold)
+    #     for rowNum in range(len(xlColCont)):
+    #         if np.isnan(xlColCont[rowNum]):
+    #             worksheet.write_number(rowNum + headRows, colNum + headCols, 0)
+    #         else:
+    #             worksheet.write_number(rowNum + headRows, colNum+headCols, xlColCont[rowNum])
+    # workbook.close()
+    #
+    # print("roic value out in :" + outanalypath)
