@@ -124,8 +124,8 @@ def calc_stock_roic_df(stock,name):
         else:
             print("AkShareFile:%s exist" % (filefolder))
 
-        fininpath = "%s/%s%s" % (filefolder, stock, '_fin_in.xls')
-        tradeinpath = "%s/%s%s" % (filefolder, stock, '_trade_in.xls')
+        fininpath = "%s/%s%s" % (filefolder, stock, '_fin_in.xlsx')
+        tradeinpath = "%s/%s%s" % (filefolder, stock, '_trade_in.xlsx')
 
         # 总资产22,493,600,000.00元
         finpath, finsheet = get_akshare_stock_financial(fininpath, stock)
@@ -191,15 +191,15 @@ if __name__=='__main__':
     index_stock_cons_df = pd.DataFrame()
     if hsstocks == '*':
         #存在数据缺失
-        #index_stock_cons_df = ak.index_stock_cons(index="000300") #沪深300
-        index_stock_cons_df = ak.index_stock_cons_csindex(index="000300")#沪深300
+        index_stock_cons_df = ak.index_stock_cons(index="000300") #沪深300
+        #index_stock_cons_df = ak.index_stock_cons_csindex(index="000300")#沪深300
         #index_stock_cons_df = ak.index_stock_cons_sina(index="000300")#沪深300
     else:
         #index_stock_cons_df['symbol'] = ['' for stock in argv[1:]]
         index_stock_cons_df['code'] = [stock for stock in argv[1:]]
         index_stock_cons_df['name'] = ['' for stock in argv[1:]]
 
-    timepath = r'./time.xls'
+    timepath = r'./time.xlsx'
     roic_global_df = init_global_time_df(timepath)
 
     for item in index_stock_cons_df.itertuples():
@@ -234,7 +234,7 @@ if __name__=='__main__':
     bond_selected_df = roic_global_df[roic_global_df['近期均值'] >= 8.0]
     bond_selected_df = bond_selected_df.sort_values('价值品质',ascending=False)
 
-    fileout =  './roic' + datetime.datetime.now().strftime('%Y%m') + '.xls'
+    fileout =  './roic' + datetime.datetime.now().strftime('%Y%m') + '.xlsx'
     writer = pd.ExcelWriter(fileout)
     roic_global_df.to_excel(writer,'all')
     bond_selected_df.to_excel(writer,'selected')
