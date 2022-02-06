@@ -129,9 +129,9 @@ def calc_stock_roic_df(stock,name):
 
         # 总资产22,493,600,000.00元
         finpath, finsheet = get_akshare_stock_financial(fininpath, stock)
-        print("data of path:" + finpath + "sheetname:" + finsheet)
+        #print("data of path:" + finpath + "sheetname:" + finsheet)
         tradepath, tradesheet = get_akshare_stock_trade(tradeinpath, stock)
-        print("data of path:" + tradepath + "sheetname:" + tradesheet)
+        #print("data of path:" + tradepath + "sheetname:" + tradesheet)
 
         stock_a_indicator_df = pd.read_excel(tradepath, tradesheet, converters={'trade_date': str, 'pb': str})[['trade_date', 'pb']]
         stock_financial_abstract_df = pd.read_excel(finpath, finsheet, converters={'截止日期': str, '资产总计': str,'净利润': str,'财务费用': str})[['截止日期', '资产总计', '净利润', '财务费用']]
@@ -173,7 +173,25 @@ def init_global_time_df(timepath):
 
 
 
+def get_laststock_set(hs300,datadir):
+    allset = set()
+    if os.path.exists(hs300):
+        input = open(hs300,'r')
+        allset = set([stock.rstrip() for stock in input.readlines()])
+    else:
+        index_stock_cons_df = ak.index_stock_cons(index="000300") #沪深300
+        allset = set(index_stock_cons_df['品种代码'].values.tolist()[0::])
 
+    print(len(allset),allset)
+
+    existset = set()
+    if os.path.exists(datadir):
+        filelist = os.listdir(datadir)
+        existset = set([stock.split('_')[0] for stock in filelist])
+
+    lastset = allset - existset
+
+    return allset,lastset
 
 
 if __name__=='__main__':
@@ -190,12 +208,14 @@ if __name__=='__main__':
 
     index_stock_cons_df = pd.DataFrame()
     if hsstocks == '*':
-        #存在数据缺失
-        index_stock_cons_df = ak.index_stock_cons(index="000300") #沪深300
-        #index_stock_cons_df = ak.index_stock_cons_csindex(index="000300")#沪深300
-        #index_stock_cons_df = ak.index_stock_cons_sina(index="000300")#沪深300
+        hs300 = './hs300';datadir = './data'
+        stockset,lastset = get_laststock_set(hs300, datadir)
+        if len(lastset) >0 :
+            print("stock data is not complete",lastset)
+
+        index_stock_cons_df['code'] = [stock for stock in stockset]
+        index_stock_cons_df['name'] = ['' for stock in stockset]    
     else:
-        #index_stock_cons_df['symbol'] = ['' for stock in argv[1:]]
         index_stock_cons_df['code'] = [stock for stock in argv[1:]]
         index_stock_cons_df['name'] = ['' for stock in argv[1:]]
 
