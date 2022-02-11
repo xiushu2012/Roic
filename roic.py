@@ -96,23 +96,20 @@ def get_time_stamp(date):
     return secondsFrom1970
 
 
-def get_latest30_pbvalue(tradedf,datecolumn,pbcolumn):
+def get_latest30_tobinqc(tradedf,datecolumn,pbcolumn,debt,capital):
     count = 0
     value = 0
     days = 30
-    latest = ''
     for tup in zip(tradedf[datecolumn], tradedf[pbcolumn]):
-        value += float(tup[1])
+        value += float(tup[1])*10000
         count += 1
-
-        if count == 1:
-            latest = tup[0]
         if count >= days:
             break
-    return ('30pb',value/days)
+    qcvalue = (value/count+debt)/capital
+    return qcvalue
 
 
-def calc_stock_roic_df(stock,name):
+def calc_stock_roic_df(stock,name,qcname):
     roic_stock_df = pd.DataFrame()
     bget = False
     try:
@@ -133,12 +130,16 @@ def calc_stock_roic_df(stock,name):
         tradepath, tradesheet = get_akshare_stock_trade(tradeinpath, stock)
         #print("data of path:" + tradepath + "sheetname:" + tradesheet)
 
-        stock_a_indicator_df = pd.read_excel(tradepath, tradesheet, converters={'trade_date': str, 'pb': str})[['trade_date', 'pb']]
-        stock_financial_abstract_df = pd.read_excel(finpath, finsheet, converters={'截止日期': str, '资产总计': str,'净利润': str,'财务费用': str})[['截止日期', '资产总计', '净利润', '财务费用']]
+        stock_a_indicator_df = pd.read_excel(tradepath, tradesheet, converters={'trade_date': str, 'total_mv': str})[['trade_date', 'total_mv']]
+        stock_financial_abstract_df = pd.read_excel(finpath, finsheet, converters={'截止日期': str, '资产总计': str,'净利润': str,'财务费用': str,'长期负债合计':str})[['截止日期', '资产总计', '净利润', '财务费用','长期负债合计']]
 
-        if stock_financial_abstract_df.empty:
+        strdebt = stock_financial_abstract_df['长期负债合计'][0]
+        strcapital  = stock_financial_abstract_df['资产总计'][0]
+        print("长期债务",strdebt)
+        if stock_financial_abstract_df.empty or (strdebt is np.nan) or (strcapital is np.nan):
             bget = False;
         else:
+
             findatecol =  stock  +  'date'
             finroiccol =  stock  +   name
 
@@ -146,9 +147,13 @@ def calc_stock_roic_df(stock,name):
             stock_financial_abstract_df[finroiccol] = stock_financial_abstract_df.apply(lambda row: get_roic_value(row['资产总计'], row['净利润'],row['财务费用']), axis=1)
 
             roic_stock_df = stock_financial_abstract_df[stock_financial_abstract_df['净利润'] != 0][[findatecol,finroiccol]]
-            latestpb = get_latest30_pbvalue(stock_a_indicator_df, 'trade_date', 'pb')
-            pbdataframe = pd.DataFrame([[latestpb[0],latestpb[1]]],columns=roic_stock_df.columns)
-            roic_stock_df = roic_stock_df.append(pbdataframe)
+
+            debt = float(strdebt[0:-1].replace(',', ''))
+            capital = float(strcapital[0:-1].replace(',', ''))
+
+            qcvalue = get_latest30_tobinqc(stock_a_indicator_df, 'trade_date', 'total_mv',debt,capital)
+            qcdataframe = pd.DataFrame([[qcname,qcvalue]],columns=roic_stock_df.columns)
+            roic_stock_df = roic_stock_df.append(qcdataframe)
 
             bget = True;
     except IOError:
@@ -221,12 +226,14 @@ if __name__=='__main__':
 
     timepath = r'./time.xlsx'
     roic_global_df = init_global_time_df(timepath)
+    qcname = roic_global_df.index.values.tolist()[-1]
+    print(qcname)
 
     for item in index_stock_cons_df.itertuples():
         stock = item[1].rjust(6,'0')#品种代码 code
         name  = item[2]							#品种名称  name
 
-        bget,roic_stock_df = calc_stock_roic_df(stock,name)
+        bget,roic_stock_df = calc_stock_roic_df(stock,name,qcname)
         if bget is False:
             print("get empty DataFrame:%s" % stock)
             continue
@@ -247,7 +254,7 @@ if __name__=='__main__':
     roic_global_df['全局标差'] = globalstddf
     roic_global_df['近期均值'] = nearmeandf
     roic_global_df['远期均值'] = farmeandf
-    roic_global_df['价值品质'] = roic_global_df.apply(lambda row: row['近期均值']/5-row['30pb'], axis=1)
+    roic_global_df['价值品质'] = roic_global_df.apply(lambda row: row['近期均值']/5-row[qcname], axis=1)
     roic_global_df = roic_global_df.sort_values('近期均值', ascending=False)
 
     #bond_selected_df = roic_global_df[(roic_global_df['近期均值'] >= 8.0) & (roic_global_df['远期均值'] >= 8.0)]
