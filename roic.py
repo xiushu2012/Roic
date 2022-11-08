@@ -101,11 +101,13 @@ def get_latest30_tobinqc(tradedf,datecolumn,pbcolumn,debt,capital):
     value = 0
     days = 30
     for tup in zip(tradedf[datecolumn], tradedf[pbcolumn]):
+        #print(tup[0],tup[1])
         value += float(tup[1])*10000
         count += 1
         if count >= days:
             break
     qcvalue = (value/count+debt)/capital
+    print('qc30:',qcvalue)
     return qcvalue
 
 
@@ -131,11 +133,13 @@ def calc_stock_roic_df(stock,name,qcname):
         #print("data of path:" + tradepath + "sheetname:" + tradesheet)
 
         stock_a_indicator_df = pd.read_excel(tradepath, tradesheet, converters={'trade_date': str, 'total_mv': str})[['trade_date', 'total_mv']]
+        stock_a_indicator_df = stock_a_indicator_df.sort_values('trade_date', ascending=False)
         stock_financial_abstract_df = pd.read_excel(finpath, finsheet, converters={'截止日期': str, '资产总计': str,'净利润': str,'财务费用': str,'长期负债合计':str})[['截止日期', '资产总计', '净利润', '财务费用','长期负债合计']]
+        stock_financial_abstract_df = stock_financial_abstract_df.sort_values('截止日期', ascending=False)
 
         strdebt = stock_financial_abstract_df['长期负债合计'][0]
         strcapital  = stock_financial_abstract_df['资产总计'][0]
-        print("长期债务",strdebt)
+        print("长期债务",strdebt);print("资产总计",strcapital);
         if stock_financial_abstract_df.empty or (strdebt is np.nan) or (strcapital is np.nan):
             bget = False;
         else:
@@ -150,6 +154,7 @@ def calc_stock_roic_df(stock,name,qcname):
 
             debt = float(strdebt[0:-1].replace(',', ''))
             capital = float(strcapital[0:-1].replace(',', ''))
+            #print("长期债务",debt);print("资产总计",capital);
 
             qcvalue = get_latest30_tobinqc(stock_a_indicator_df, 'trade_date', 'total_mv',debt,capital)
             qcdataframe = pd.DataFrame([[qcname,qcvalue]],columns=roic_stock_df.columns)
