@@ -181,13 +181,22 @@ def init_global_time_df(timepath):
     time_df = pd.DataFrame(index=time_list)
     return time_df
 
+def get_stockname_dict(hs300):
+    stockdict ={}
+    if os.path.exists(hs300):
+        input = open(hs300,'r')
+        for stock in input.readlines():
+          line = stock.rstrip().split('\t')
+          stockcode = line[0];stockname = line[1]
+          stockdict[stockcode]=stockname
+    return stockdict
 
 
 def get_laststock_set(hs300,datadir):
     allset = set()
     if os.path.exists(hs300):
         input = open(hs300,'r')
-        allset = set([stock.rstrip() for stock in input.readlines()])
+        allset = set([(stock.rstrip().split())[0] for stock in input.readlines()])
     else:
         index_stock_cons_df = ak.index_stock_cons(index="000300") #沪深300
         allset = set(index_stock_cons_df['品种代码'].values.tolist()[0::])
@@ -223,8 +232,9 @@ if __name__=='__main__':
         if len(lastset) >0 :
             print("stock data is not complete",lastset)
 
+        stockdict = get_stockname_dict(hs300)
         index_stock_cons_df['code'] = [stock for stock in stockset]
-        index_stock_cons_df['name'] = ['' for stock in stockset]    
+        index_stock_cons_df['name'] = [stockdict[stock] for stock in stockset if stock in stockdict.keys()]    
     else:
         index_stock_cons_df['code'] = [stock for stock in argv[1:]]
         index_stock_cons_df['name'] = ['' for stock in argv[1:]]
@@ -262,8 +272,8 @@ if __name__=='__main__':
     roic_global_df['价值品质'] = roic_global_df.apply(lambda row: row['近期均值']/5-row[qcname], axis=1)
     roic_global_df = roic_global_df.sort_values('近期均值', ascending=False)
 
-    #bond_selected_df = roic_global_df[(roic_global_df['近期均值'] >= 8.0) & (roic_global_df['远期均值'] >= 8.0)]
-    bond_selected_df = roic_global_df[roic_global_df['近期均值'] >= 8.0]
+    bond_selected_df = roic_global_df[(roic_global_df['近期均值'] >= 8.0) & (roic_global_df['远期均值'] >= 8.0)]
+    #bond_selected_df = roic_global_df[(roic_global_df['近期均值'] >= 8.0) & (roic_global_df['价值品质'] >= 0.0)]
     bond_selected_df = bond_selected_df.sort_values('价值品质',ascending=False)
 
     fileout =  './roic' + datetime.datetime.now().strftime('%Y%m') + '.xlsx'
