@@ -269,12 +269,12 @@ if __name__=='__main__':
     roic_global_df['全局标差'] = globalstddf
     roic_global_df['近期均值'] = nearmeandf
     roic_global_df['远期均值'] = farmeandf
-    roic_global_df['价值品质'] = roic_global_df.apply(lambda row: row['近期均值']/5-row[qcname], axis=1)
+    roic_global_df['价值溢价'] = roic_global_df.apply(lambda row: (row[qcname]-row['近期均值']/5)/(row['近期均值']/5), axis=1)
     roic_global_df = roic_global_df.sort_values('近期均值', ascending=False)
 
     bond_selected_df = roic_global_df[(roic_global_df['近期均值'] >= 8.0) & (roic_global_df['远期均值'] >= 8.0)]
-    #bond_selected_df = roic_global_df[(roic_global_df['近期均值'] >= 8.0) & (roic_global_df['价值品质'] >= 0.0)]
-    bond_selected_df = bond_selected_df.sort_values('价值品质',ascending=False)
+    #bond_selected_df = roic_global_df[(roic_global_df['近期均值'] >= 8.0) & (roic_global_df['价值溢价'] <= 0.0)]
+    bond_selected_df = bond_selected_df.sort_values('价值溢价',ascending=True)
 
     fileout =  './roic' + datetime.datetime.now().strftime('%Y%m') + '.xlsx'
     writer = pd.ExcelWriter(fileout)
