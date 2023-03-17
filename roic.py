@@ -29,6 +29,22 @@ def get_akshare_stock_financial(xlsfile,stock):
     else:
         return xlsfile, shname
 
+def get_akshare_stock_financial_analysis(xlsfile,stock):
+    try:
+        shname='financial'
+        isExist = os.path.exists(xlsfile)
+        if not isExist:
+            stock_financial_analysis_indicator_df = ak.stock_financial_analysis_indicator(symbol=stock)
+            stock_financial_analysis_indicator_df.to_excel(xlsfile,sheet_name=shname)
+            print("xfsfile:%s create" % (xlsfile))
+        else:
+            print("xfsfile:%s exist" % (xlsfile))
+            #print(stock_financial_abstract_df)
+    except IOError:
+        print("Error get stock financial:%s" % stock )
+    else:
+        return xlsfile, shname
+
 def get_akshare_stock_trade(xlsfile,stock):
     try:
         shname='trade'
@@ -68,6 +84,18 @@ def get_roic_value(capital, profits,cost):
         floatcost = float(cost[0:-1].replace(',',''))
 
     return 100*(floatcost+floatprofits)/floatcapital
+    
+
+def get_roic_value_ex(capital,profitrate,shareholder,debtratio):
+    #print(capital,profitrate,shareholder,longterm)
+    floatcapital = float(capital)
+    
+    floatprofit = float(profitrate)/100
+    floatholder = float(shareholder)/100
+    floatdebt = float(debtratio)/100
+
+    return 100*floatprofit/(floatholder+floatdebt)
+
 
 
 def calc_latest_roic_mean(row,beg,end):
@@ -127,19 +155,25 @@ def calc_stock_roic_df(stock,name,qcname):
         tradeinpath = "%s/%s%s" % (filefolder, stock, '_trade_in.xlsx')
 
         # 总资产22,493,600,000.00元
-        finpath, finsheet = get_akshare_stock_financial(fininpath, stock)
+        #finpath, finsheet = get_akshare_stock_financial(fininpath, stock)
+        finpath, finsheet = get_akshare_stock_financial_analysis(fininpath, stock)
         #print("data of path:" + finpath + "sheetname:" + finsheet)
         tradepath, tradesheet = get_akshare_stock_trade(tradeinpath, stock)
         #print("data of path:" + tradepath + "sheetname:" + tradesheet)
 
         stock_a_indicator_df = pd.read_excel(tradepath, tradesheet, converters={'trade_date': str, 'total_mv': str})[['trade_date', 'total_mv']]
         stock_a_indicator_df = stock_a_indicator_df.sort_values('trade_date', ascending=False)
-        stock_financial_abstract_df = pd.read_excel(finpath, finsheet, converters={'截止日期': str, '资产总计': str,'净利润': str,'财务费用': str,'长期负债合计':str})[['截止日期', '资产总计', '净利润', '财务费用','长期负债合计']]
-        stock_financial_abstract_df = stock_financial_abstract_df.sort_values('截止日期', ascending=False)
+        
+        #stock_financial_abstract_df = pd.read_excel(finpath, finsheet, converters={'截止日期': str, '资产总计': str,'净利润': str,'财务费用': str,'长期负债合计':str})[['截止日期', '资产总计', '净利润', '财务费用','长期负债合计']]
+        #stock_financial_abstract_df = stock_financial_abstract_df.sort_values('截止日期', ascending=False)
 
-        strdebt = stock_financial_abstract_df['长期负债合计'][0]
-        strcapital  = stock_financial_abstract_df['资产总计'][0]
-        print("长期债务",strdebt);print("资产总计",strcapital);
+        stock_financial_abstract_df = pd.read_excel(finpath, finsheet, converters={'日期': str, '总资产(元)': str,'总资产净利润率(%)': str,'股东权益比率(%)': str,'资产负债率(%)':str})[['日期', '总资产(元)', '总资产净利润率(%)', '股东权益比率(%)','资产负债率(%)']]
+        stock_financial_abstract_df = stock_financial_abstract_df.sort_values('日期', ascending=False)
+        stock_financial_abstract_df = stock_financial_abstract_df.replace('--','0')
+        strcapital  = stock_financial_abstract_df['总资产(元)'][0]
+        strdebt = stock_financial_abstract_df['资产负债率(%)'][0]
+        
+        print("资产负债率",strdebt);print("资产总计",strcapital);
         if stock_financial_abstract_df.empty or (strdebt is np.nan) or (strcapital is np.nan):
             bget = False;
         else:
@@ -147,13 +181,20 @@ def calc_stock_roic_df(stock,name,qcname):
             findatecol =  stock  +  'date'
             finroiccol =  stock  +   name
 
-            stock_financial_abstract_df[findatecol] = stock_financial_abstract_df.apply(lambda row: get_fin_date(row['截止日期']),axis=1)
-            stock_financial_abstract_df[finroiccol] = stock_financial_abstract_df.apply(lambda row: get_roic_value(row['资产总计'], row['净利润'],row['财务费用']), axis=1)
 
-            roic_stock_df = stock_financial_abstract_df[stock_financial_abstract_df['净利润'] != 0][[findatecol,finroiccol]]
+            #stock_financial_abstract_df[findatecol] = stock_financial_abstract_df.apply(lambda row: get_fin_date(row['截止日期']),axis=1)
+            #stock_financial_abstract_df[finroiccol] = stock_financial_abstract_df.apply(lambda row: get_roic_value(row['资产总计'], row['净利润'],row['财务费用']), axis=1)
+            
+            stock_financial_abstract_df = stock_financial_abstract_df[(stock_financial_abstract_df['总资产净利润率(%)'] != '0') & (stock_financial_abstract_df['总资产(元)'] != '0')]
+            stock_financial_abstract_df[findatecol] = stock_financial_abstract_df.apply(lambda row: get_fin_date(row['日期']),axis=1)
+            stock_financial_abstract_df[finroiccol] = stock_financial_abstract_df.apply(lambda row: get_roic_value_ex(row['总资产(元)'], row['总资产净利润率(%)'],row['股东权益比率(%)'],row['资产负债率(%)']), axis=1)
+            #print(stock_financial_abstract_df)
+            
+            roic_stock_df = stock_financial_abstract_df[[findatecol,finroiccol]]
+            #print(roic_stock_df)
 
-            debt = float(strdebt[0:-1].replace(',', ''))
-            capital = float(strcapital[0:-1].replace(',', ''))
+            capital = float(strcapital)
+            debt = capital*float(strdebt)/100.0
             #print("长期债务",debt);print("资产总计",capital);
 
             qcvalue = get_latest30_tobinqc(stock_a_indicator_df, 'trade_date', 'total_mv',debt,capital)
