@@ -199,7 +199,8 @@ def calc_stock_roic_df(stock,name,qcname):
 
             qcvalue = get_latest30_tobinqc(stock_a_indicator_df, 'trade_date', 'total_mv',debt,capital)
             qcdataframe = pd.DataFrame([[qcname,qcvalue]],columns=roic_stock_df.columns)
-            roic_stock_df = roic_stock_df.append(qcdataframe)
+            #roic_stock_df = roic_stock_df.append(qcdataframe)
+            roic_stock_df = pd.concat([roic_stock_df,qcdataframe],ignore_index=True)
 
             bget = True;
     except IOError:
@@ -321,7 +322,8 @@ if __name__=='__main__':
     writer = pd.ExcelWriter(fileout)
     roic_global_df.to_excel(writer,'all')
     bond_selected_df.to_excel(writer,'selected')
-    writer.save()
+    #writer.save()
+    writer.close()
     print("roic value out in:" + fileout)
 
     # outanalypath = r'./roic.xlsx'
